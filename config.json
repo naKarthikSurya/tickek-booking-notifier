@@ -1,0 +1,21 @@
+{
+  "movie": {
+    "name": "Avengers: Doomsday",
+    "district_url": "https://www.district.in/movies/avengers-doomsday-movie-tickets-in-chennai-MV176735",
+    "content_id": "176735"
+  },
+  "dates": ["2026-12-17", "2026-12-18", "2026-12-19", "2026-12-20", "2026-12-21"],
+  "languages": ["English"],
+  "format_regex": "3D|INFINITY|IMAX|4DX",
+  "morning_before_hour": 12,
+  "min_seats": 1,
+  "priority_theatres": [
+    {"label": "Rakki Cinemas", "match": "rakki"},
+    {"label": "Phoenix Marketcity (IMAX)", "match": "phoenix"},
+    {"label": "INOX BigPix", "match": "big ?pix"}
+  ],
+  "check_interval_seconds": 180,
+  "request_delay_seconds": 2,
+  "seats_back_cooldown_minutes": 30,
+  "priority_max_repeats": 10
+}

@@ -1,0 +1,54 @@
+name: Ticket watcher
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"   # keeps a run queued; each run lives ~5h40m
+  workflow_dispatch:
+    inputs:
+      max_minutes:
+        description: "Minutes to keep watching in this run"
+        default: "340"
+
+# Only one watcher at a time; a newly scheduled run waits and takes over
+# when the current one exits, so there is no gap between runs.
+concurrency:
+  group: ticket-watcher
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore watcher state
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: watcher-state-${{ github.run_id }}
+          restore-keys: watcher-state-
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Watch District
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m notifier --max-minutes "${{ github.event.inputs.max_minutes || '340' }}"
+
+      - name: Save watcher state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: watcher-state-${{ github.run_id }}-${{ github.run_attempt }}
