@@ -13,46 +13,15 @@ import re
 import time
 import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+
+from .models import BlockedError, Show
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/131.0 Safari/537.36")
 NEXT_DATA_RE = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
-
-
-class BlockedError(Exception):
-    """District returned something other than the normal page (blocked / changed)."""
-
-
-@dataclass(frozen=True)
-class Show:
-    cinema_id: str
-    cinema_name: str
-    session_id: str
-    show_time: str  # local IST, e.g. "2026-12-17T07:35"
-    fmt: str
-    language: str
-    avail: int
-    total: int
-    booking_url: str
-
-    @property
-    def key(self) -> str:
-        return f"{self.cinema_id}:{self.session_id}"
-
-    @property
-    def date(self) -> str:
-        return self.show_time[:10]
-
-    @property
-    def hour(self) -> int:
-        return int(self.show_time[11:13])
-
-    def to_dict(self) -> dict:
-        return asdict(self)
 
 
 def fetch(url: str, timeout: int = 20, retries: int = 2) -> str:

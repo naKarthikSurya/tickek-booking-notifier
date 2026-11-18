@@ -7,7 +7,7 @@ import re
 import time
 from dataclasses import dataclass, field
 
-from .district import Show
+from .models import Show
 
 
 @dataclass
@@ -40,8 +40,7 @@ class State:
     pending_priority: list = field(default_factory=list)  # [{text, repeats}]
     tg_offset: int = 0
     baseline_done: bool = False
-    fail_streak: int = 0
-    fail_alerted: bool = False
+    source_fails: dict = field(default_factory=dict)   # source -> {streak, alerted}
 
     @classmethod
     def load(cls, path: str) -> "State":
@@ -59,7 +58,8 @@ class State:
         os.replace(tmp, path)
 
 
-def detect(shows: list[Show], state: State, cfg: dict, now: float | None = None) -> list[Event]:
+def detect(shows: list[Show], state: State, cfg: dict, now: float | None = None,
+           active_sources: set[str] | None = None) -> list[Event]:
     """Compare the latest matching shows against state; update state; return alerts."""
     now = now or time.time()
     cooldown = cfg.get("seats_back_cooldown_minutes", 30) * 60
@@ -73,12 +73,13 @@ def detect(shows: list[Show], state: State, cfg: dict, now: float | None = None)
         matching_keys.add(s.key)
         prio = priority_of(s, cfg)
         prev = state.seen_shows.get(s.key)
-        if s.cinema_id not in state.seen_cinemas:
-            state.seen_cinemas.append(s.cinema_id)
-            opened.add(s.cinema_id)
+        ckey = f"{s.source}:{s.cinema_id}"
+        if ckey not in state.seen_cinemas:
+            state.seen_cinemas.append(ckey)
+            opened.add(ckey)
         if prev is None:
             if s.avail >= min_seats:
-                kind = "theatre_opened" if s.cinema_id in opened else "new_show"
+                kind = "theatre_opened" if ckey in opened else "new_show"
                 events.append(Event(kind, s, prio))
                 state.seats_alerted_at[s.key] = now
         elif prev < min_seats <= s.avail:
@@ -87,8 +88,10 @@ def detect(shows: list[Show], state: State, cfg: dict, now: float | None = None)
                 events.append(Event("seats_back", s, prio))
                 state.seats_alerted_at[s.key] = now
         state.seen_shows[s.key] = s.avail
-    # If a show is pulled/closed on District, forget it so a real re-opening alerts again.
+    # Only forget missing shows for sources that actually succeeded this cycle.
+    sources = active_sources if active_sources is not None else {s.source for s in shows}
     for gone in set(state.seen_shows) - matching_keys:
-        state.seen_shows.pop(gone, None)
-        state.seats_alerted_at.pop(gone, None)
+        if gone.split(":", 1)[0] in sources:
+            state.seen_shows.pop(gone, None)
+            state.seats_alerted_at.pop(gone, None)
     return events

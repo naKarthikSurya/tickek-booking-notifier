@@ -13,7 +13,8 @@ import sys
 import time
 from datetime import datetime
 
-from .district import BlockedError, Show, fetch_all_shows
+from . import district, pvr
+from .models import BlockedError, Show
 from .monitor import Event, State, detect, matches, priority_of
 from .telegram import Telegram
 
@@ -34,9 +35,10 @@ def fmt_time(show: Show) -> str:
 
 
 def show_line(s: Show) -> str:
+    seats = f"{s.avail}/{s.total} seats" if s.total > 0 else "Seats available"
     return (f"• <b>{html.escape(s.cinema_name)}</b>\n"
-            f"  {fmt_time(s)} · {html.escape(s.fmt)} · {s.avail}/{s.total} seats\n"
-            f"  <a href=\"{html.escape(s.booking_url)}\">Book on District</a>")
+            f"  {fmt_time(s)} · {html.escape(s.fmt)} · {seats}\n"
+            f"  <a href=\"{html.escape(s.booking_url)}\">Book on {html.escape(s.source)}</a>")
 
 
 def event_text(e: Event, movie: str) -> str:
@@ -101,26 +103,45 @@ def cycle(cfg: dict, state: State, notifier: Notifier, last_shows: list[Show]) -
             state.pending_priority = []
             notifier.send("✅ Got it — priority alert repeats stopped.")
 
-    # 2. Fetch.
-    try:
-        shows = fetch_all_shows(cfg["movie"]["district_url"], cfg["movie"]["content_id"],
-                                cfg["languages"], cfg["dates"], cfg.get("request_delay_seconds", 2))
-    except BlockedError as e:
-        state.fail_streak += 1
-        log(f"Fetch failed ({state.fail_streak}x): {e}")
-        if state.fail_streak >= 3 and not state.fail_alerted:
-            notifier.send(f"⚠️ Ticket watcher can't read District right now ({html.escape(str(e))}). "
-                          "It may be blocked from this machine. Will keep retrying.")
-            state.fail_alerted = True
+    # 2. Fetch from every enabled source independently.
+    delay = cfg.get("request_delay_seconds", 2)
+    m = cfg["movie"]
+    sources = [
+        ("District", lambda: district.fetch_all_shows(
+            m["district_url"], m["content_id"], cfg["languages"], cfg["dates"], delay)),
+    ]
+    if m.get("pvr_movie_id") or m.get("pvr_name_regex"):
+        sources.append(("PVR/INOX", lambda: pvr.fetch_all_shows(
+            m.get("pvr_city", "Chennai"), m.get("pvr_movie_id", ""),
+            m.get("pvr_name_regex", m["name"]), cfg["languages"], cfg["dates"], min(delay, 1.5))))
+
+    shows: list[Show] = []
+    ok_sources: set[str] = set()
+    for name, fetcher in sources:
+        fstate = state.source_fails.setdefault(name, {"streak": 0, "alerted": False})
+        try:
+            got = fetcher()
+            shows.extend(got)
+            ok_sources.add(name)
+            if fstate.get("alerted"):
+                notifier.send(f"✅ Ticket watcher is reading {html.escape(name)} again.")
+            fstate["streak"], fstate["alerted"] = 0, False
+        except BlockedError as e:
+            fstate["streak"] = fstate.get("streak", 0) + 1
+            log(f"{name} fetch failed ({fstate['streak']}x): {e}")
+            if fstate["streak"] >= 3 and not fstate.get("alerted"):
+                notifier.send(f"⚠️ Ticket watcher can't read {html.escape(name)} right now "
+                              f"({html.escape(str(e))}). Will keep retrying.")
+                fstate["alerted"] = True
+
+    if not ok_sources:
         return last_shows
-    if state.fail_alerted:
-        notifier.send("✅ Ticket watcher is reading District again.")
-    state.fail_streak, state.fail_alerted = 0, False
     n_match = sum(matches(s, cfg) for s in shows)
-    log(f"Fetched {len(shows)} English shows, {n_match} match filters.")
+    counts = ", ".join(f"{n}: {sum(s.source == n for s in shows)}" for n in sorted(ok_sources))
+    log(f"Fetched {len(shows)} English shows ({counts}), {n_match} match filters.")
 
     # 3. First run: one digest instead of a flood of alerts.
-    events = detect(shows, state, cfg)
+    events = detect(shows, state, cfg, active_sources=ok_sources)
     if not state.baseline_done:
         state.baseline_done = True
         notifier.send(summary_text(shows, cfg, "🟢 Ticket watcher started"))
@@ -129,7 +150,8 @@ def cycle(cfg: dict, state: State, notifier: Notifier, last_shows: list[Show]) -
     # 4. Alerts.
     min_seats = cfg.get("min_seats", 1)
     live_keys = {s.key for s in shows if matches(s, cfg) and s.avail >= min_seats}
-    resend = [p for p in state.pending_priority if p.get("key") in live_keys]
+    resend = [p for p in state.pending_priority
+              if p.get("key", "").split(":", 1)[0] not in ok_sources or p.get("key") in live_keys]
     state.pending_priority = list(resend)
     normal = []
     for e in events:

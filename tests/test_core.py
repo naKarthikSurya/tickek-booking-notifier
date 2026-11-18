@@ -3,6 +3,7 @@ import unittest
 
 from notifier.district import BlockedError, Show, format_groups, parse_next_data, parse_shows
 from notifier.monitor import State, detect, matches, priority_of
+from notifier.pvr import parse_msessions
 
 CFG = {
     "dates": ["2026-12-17", "2026-12-18"],
@@ -105,6 +106,46 @@ class DetectTests(unittest.TestCase):
         p = os.path.join(tempfile.mkdtemp(), "s.json")
         st.save(p)
         self.assertEqual(State.load(p).seen_shows, {"1:1": 3})
+
+    def test_pvr_parse_and_multi_source_isolation(self):
+        payload = {
+            "result": "success",
+            "code": 10001,
+            "output": {
+                "movieCinemaSessions": [{
+                    "cinema": {"theatreId": "320", "name": "INOX Luxe Phoenix Market City"},
+                    "experienceSessions": [{
+                        "experience": "IMAX",
+                        "shows": [
+                            {"sessionId": 1, "language": "English", "showDateStr": "2026-12-17",
+                             "showTime": "09:15 AM", "filmFormat": "IMAX 3D", "screenType": "IMAX",
+                             "status": 2, "encrypted": "abc=="},
+                            {"sessionId": 2, "language": "English", "showDateStr": "2026-12-17",
+                             "showTime": "10:15 AM", "filmFormat": "IMAX 3D", "screenType": "IMAX",
+                             "status": 3, "encrypted": "def=="},
+                            {"sessionId": 3, "language": "Tamil", "showDateStr": "2026-12-17",
+                             "showTime": "09:00 AM", "filmFormat": "2D", "screenType": "",
+                             "status": 1, "encrypted": "ghi=="},
+                        ],
+                    }],
+                }],
+            },
+        }
+        pvr_shows = parse_msessions(payload, ["English"], {"2026-12-17"})
+        self.assertEqual(len(pvr_shows), 2)
+        self.assertEqual((pvr_shows[0].avail, pvr_shows[0].show_time, pvr_shows[0].source),
+                         (1, "2026-12-17T09:15", "PVR/INOX"))
+        self.assertEqual(pvr_shows[1].avail, 0)
+        self.assertEqual(pvr_shows[0].booking_url, "https://www.pvrcinemas.com/seatlayout/abc==")
+
+        st = State()
+        d_show = Show("1", "Rakki", "99", "2026-12-17T08:00", "3D", "English", 10, 100, "u", source="District")
+        ev = detect([d_show, pvr_shows[0]], st, CFG, now=0)
+        self.assertEqual(len(ev), 2)
+        # If District fails one cycle (only PVR/INOX active), District show must not be forgotten.
+        ev2 = detect([pvr_shows[0]], st, CFG, now=60, active_sources={"PVR/INOX"})
+        self.assertEqual(ev2, [])
+        self.assertIn(d_show.key, st.seen_shows)
 
 
 if __name__ == "__main__":

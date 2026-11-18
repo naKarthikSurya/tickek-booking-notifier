@@ -1,17 +1,18 @@
 # Ticket Booking Notifier — Avengers: Doomsday, Chennai
 
-Watches **District** (district.in) 24×7 for **English, 3D / premium (Infinity Vision, IMAX, 4DX), morning (before 12 PM)**
-shows of *Avengers: Doomsday* in Chennai, 17–18 Dec 2026, and pings you on **Telegram** with a direct booking link when:
+Watches **District** (`district.in`, which also powers **TicketNew**) and the **PVR Cinemas & INOX Movies** API (`pvrcinemas.com` / `inoxmovies.com`, covering all 16 Chennai PVR & INOX venues including Phoenix Marketcity and INOX The Marina Mall OMR) 24×7 for **English, 3D / premium (Infinity Vision, IMAX, 4DX), morning (before 12 PM IST)** shows of *Avengers: Doomsday* in Chennai, 17–18 Dec 2026, and pings you on **Telegram** with a direct booking link when:
 
 - 🎬 a theatre **opens bookings for the first time**,
 - 🆕 a **new show** is added, or
 - 💺 **seats free up** in a show that was full (30-min cooldown per show).
 
-Priority theatres (Rakki, Phoenix Marketcity, INOX BigPix — see `config.json`) get a 🚨 alert that **repeats every
+Priority theatres (Rakki, Phoenix Marketcity, INOX BigPix / Marina Mall OMR — see `config.json`) get a 🚨 alert that **repeats every
 check until you reply anything** to the bot. Send `/status` to the bot any time for a snapshot.
 
-> BookMyShow answers automated requests with a Cloudflare "verify you are human" page, so it is **not** monitored —
-> the watcher does not try to get around bot checks. District serves its public show data normally.
+> **Other sites checked:**
+> - **TicketNew** (`ticketnew.com`): served from the same District backend (`district-movies-content.mesh`), so District already covers it.
+> - **BookMyShow**: answers automated requests with a Cloudflare "verify you are human" page (`HTTP 403`), so it is **not** monitored — the watcher never tries to bypass bot checks.
+> - **AGS Cinemas**: timed out (`HTTP 522`); **Cinepolis India / Mayajaal**: no Doomsday listings on their own homepages (Cinepolis BSR Mall OMR is already covered via District).
 
 ## 1. Create the Telegram bot (2 minutes)
 
