@@ -4,7 +4,7 @@
     "district_url": "https://www.district.in/movies/avengers-doomsday-movie-tickets-in-chennai-MV176735",
     "content_id": "176735"
   },
-  "dates": ["2026-12-17", "2026-12-18", "2026-12-19", "2026-12-20", "2026-12-21"],
+  "dates": ["2026-12-17", "2026-12-18"],
   "languages": ["English"],
   "format_regex": "3D|INFINITY|IMAX|4DX",
   "morning_before_hour": 12,

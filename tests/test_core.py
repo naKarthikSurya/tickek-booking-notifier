@@ -15,8 +15,8 @@ CFG = {
 
 
 def session(sid, time, avail, fmt="MS INFINITY VISION 3D"):
-    return {"sid": sid, "showTime": time, "avail": avail, "total": 200, "scrnFmt": fmt,
-            "mcd": "abc", "encSessionId": f"enc-{sid}"}
+    return {"sid": sid, "mid": "OBEOVX", "showTime": time, "avail": avail, "total": 200,
+            "scrnFmt": fmt, "mcd": "mm5dpqtqjz", "sType": 0, "encSessionId": f"1-{sid}-obeovx-1"}
 
 
 def page(cinemas):
@@ -38,13 +38,20 @@ def show(cid, name, sid, time, avail, fmt="MS INFINITY VISION 3D"):
 
 class ParseTests(unittest.TestCase):
     def test_parses_sessions_and_groups(self):
-        st = parse_next_data(page([(1, "PVR VR Mall", [session(10, "2026-12-17T07:35", 8)])]))
+        # 2026-12-17T07:35 UTC = 13:05 IST; 2026-12-16T22:30 UTC = 2026-12-17 04:00 IST
+        st = parse_next_data(page([(1, "PVR VR Mall", [
+            session(10, "2026-12-17T07:35", 8),
+            session(11, "2026-12-16T22:30", 5),
+        ])]))
         groups, dates = format_groups(st)
         self.assertEqual([g["language"] for g in groups], ["English", "Tamil"])
         self.assertEqual(dates, ["2026-12-17", "2026-12-18"])
-        (s,) = parse_shows(st, "English", "176735")
-        self.assertEqual((s.cinema_name, s.avail, s.hour, s.date), ("PVR VR Mall", 8, 7, "2026-12-17"))
-        self.assertIn("encsessionid=enc-10", s.booking_url)
+        s_aft, s_morn = parse_shows(st, "English", "176735")
+        self.assertEqual((s_aft.cinema_name, s_aft.avail, s_aft.hour, s_aft.date), ("PVR VR Mall", 8, 13, "2026-12-17"))
+        self.assertEqual((s_morn.hour, s_morn.date), (4, "2026-12-17"))
+        self.assertIn("encsessionid=1-10-obeovx-mm5dpqtqjz", s_aft.booking_url)
+        self.assertIn("fromdate=2026-12-17", s_aft.booking_url)
+        self.assertIn("type=CINEMAS", s_aft.booking_url)
 
     def test_challenge_page_raises(self):
         with self.assertRaises(BlockedError):

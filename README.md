@@ -1,7 +1,7 @@
 # Ticket Booking Notifier — Avengers: Doomsday, Chennai
 
 Watches **District** (district.in) 24×7 for **English, 3D / premium (Infinity Vision, IMAX, 4DX), morning (before 12 PM)**
-shows of *Avengers: Doomsday* in Chennai, 17–21 Dec 2026, and pings you on **Telegram** with a direct booking link when:
+shows of *Avengers: Doomsday* in Chennai, 17–18 Dec 2026, and pings you on **Telegram** with a direct booking link when:
 
 - 🎬 a theatre **opens bookings for the first time**,
 - 🆕 a **new show** is added, or

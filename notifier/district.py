@@ -14,6 +14,9 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/131.0 Safari/537.36")
@@ -92,6 +95,16 @@ def format_groups(server_state: dict) -> tuple[list[dict], list[str]]:
     return groups, dates
 
 
+def to_ist(raw_time: str) -> str:
+    """District's `showTime` in __NEXT_DATA__ is UTC without a suffix; convert to IST."""
+    if not raw_time:
+        return ""
+    dt = datetime.fromisoformat(raw_time)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(IST).strftime("%Y-%m-%dT%H:%M")
+
+
 def parse_shows(server_state: dict, language: str, content_id: str) -> list[Show]:
     shows: list[Show] = []
     for ms in server_state.get("movieSessions", {}).values():
@@ -99,14 +112,20 @@ def parse_shows(server_state: dict, language: str, content_id: str) -> list[Show
             cname = cinema.get("entityName") or (cinema.get("data") or {}).get("name", "?")
             cid = str(cinema.get("entityCode") or (cinema.get("data") or {}).get("id", "?"))
             for s in cinema.get("sessions") or []:
-                url = (f"https://www.district.in/movies/seat-layout/{s.get('mcd', '')}"
-                       f"?encsessionid={s.get('encSessionId', '')}&freeseating=false"
-                       f"&fromsessions=true&type=MOVIES&contentid={content_id}")
+                show_time = to_ist(s.get("showTime", ""))
+                mcd = (s.get("mcd") or "").lower()
+                mid = (s.get("mid") or "").lower()
+                sid = str(s.get("sid") or "")
+                free_seating = "true" if s.get("sType") == 1 else "false"
+                enc_id = f"{cid}-{sid}-{mid}-{mcd}" if (mid and mcd) else s.get("encSessionId", "")
+                url = (f"https://www.district.in/movies/seat-layout/{mcd}"
+                       f"?encsessionid={enc_id}&fromdate={show_time[:10]}"
+                       f"&freeseating={free_seating}&fromsessions=true&type=CINEMAS&contentid={content_id}")
                 shows.append(Show(
                     cinema_id=cid,
                     cinema_name=cname,
-                    session_id=str(s.get("sid")),
-                    show_time=s.get("showTime", ""),
+                    session_id=sid,
+                    show_time=show_time,
                     fmt=s.get("scrnFmt") or "",
                     language=language,
                     avail=int(s.get("avail") or 0),
@@ -122,6 +141,7 @@ def fetch_all_shows(movie_url: str, content_id: str, languages: list[str],
     base = parse_next_data(fetch(movie_url))
     groups, available = format_groups(base)
     wanted_langs = {l.lower() for l in languages}
+    wanted_set = set(dates)
     wanted_dates = [d for d in dates if d in available]
     out: dict[str, Show] = {}
     for g in groups:
@@ -133,6 +153,6 @@ def fetch_all_shows(movie_url: str, content_id: str, languages: list[str],
             time.sleep(delay)
             state = parse_next_data(fetch(f"{movie_url}?frmtid={fmt_id}&fromdate={d}"))
             for show in parse_shows(state, lang, content_id):
-                if show.date == d:
+                if show.date in wanted_set:
                     out[show.key] = show
     return list(out.values())
