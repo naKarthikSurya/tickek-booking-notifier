@@ -19,28 +19,50 @@ check until you reply anything** to the bot. Send `/status` to the bot any time 
 2. Open your new bot and send it any message (e.g. `hi`).
 3. Visit `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `"chat":{"id": ... }` → that's your **chat id**.
 
-## 2a. Run on GitHub Actions (cloud, free on public repos)
+## 2a. Run on an old Android phone (Termux — recommended for 24×7)
+
+District blocks most cloud/data-centre IPs (`HTTP 403`), so running on an old phone over home Wi-Fi works reliably.
+
+1. Install **Termux from F-Droid** (`f-droid.org/packages/com.termux/`) — avoid the outdated Google Play Store build, whose package repos are broken.
+2. In Android **Settings → Apps → Termux → Battery**, set it to **Unrestricted** (disable battery optimisation) so Android doesn't kill it overnight, and keep the phone plugged in on home Wi-Fi.
+3. Open Termux and run:
+
+```bash
+termux-wake-lock
+pkg update -y && pkg install -y python git
+git clone https://github.com/naKarthikSurya/tickek-booking-notifier.git
+cd tickek-booking-notifier
+export TELEGRAM_BOT_TOKEN="<YOUR_BOT_TOKEN>"
+export TELEGRAM_CHAT_ID="<YOUR_CHAT_ID>"
+python -m notifier
+```
+
+If you were running it on your PC first, press `Ctrl+C` there once you see `🟢 Ticket watcher started` from the phone, and keep the GitHub Actions workflow disabled so you don't get double alerts.
+
+## 2b. Run on a Windows PC
+
+Requires Python 3.10+ (no external packages — standard library only).
+
+```powershell
+git clone https://github.com/naKarthikSurya/tickek-booking-notifier.git
+cd tickek-booking-notifier
+$env:TELEGRAM_BOT_TOKEN="<YOUR_BOT_TOKEN>"
+$env:TELEGRAM_CHAT_ID="<YOUR_CHAT_ID>"
+python -m notifier
+```
+
+Keep the PowerShell window open and prevent the PC from sleeping.
+
+## 2c. Run on GitHub Actions (cloud — may be blocked by District)
+
+> Note: In testing, District returned `HTTP 403` to GitHub Actions' cloud runners. Keep this disabled unless you've verified it can reach District.
 
 1. Repo → **Settings → Secrets and variables → Actions → New repository secret**:
    `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-2. **Actions** tab → *Ticket watcher* → **Run workflow**.
+2. **Actions** tab → *Ticket watcher* → **Run workflow** (or `⋯` → **Disable workflow** when running locally).
 
 Each run watches for ~5h40m and checks every 3 minutes; the 20-minute schedule keeps the next run queued so it takes
 over immediately. State (what was already alerted) is carried between runs via the Actions cache.
-
-## 2b. Run on a PC or old Android phone (Termux)
-
-```bash
-# Termux: pkg install python git   |  PC: install Python 3.10+
-git clone https://github.com/naKarthikSurya/tickek-booking-notifier && cd tickek-booking-notifier
-export TELEGRAM_BOT_TOKEN=...  TELEGRAM_CHAT_ID=...      # PowerShell: $env:TELEGRAM_BOT_TOKEN="..."
-python -m notifier                                        # runs forever
-```
-
-On Android run `termux-wake-lock` first and keep the phone charging. **Disable the GitHub workflow** (Actions tab →
-⋯ → Disable) when you switch, or you'll get double alerts.
-
-No dependencies — standard library only.
 
 ## Options
 
