@@ -66,9 +66,11 @@ def detect(shows: list[Show], state: State, cfg: dict, now: float | None = None)
     min_seats = cfg.get("min_seats", 1)
     events: list[Event] = []
     opened: set[str] = set()
+    matching_keys: set[str] = set()
     for s in sorted(shows, key=lambda x: x.show_time):
         if not matches(s, cfg):
             continue
+        matching_keys.add(s.key)
         prio = priority_of(s, cfg)
         prev = state.seen_shows.get(s.key)
         if s.cinema_id not in state.seen_cinemas:
@@ -85,4 +87,8 @@ def detect(shows: list[Show], state: State, cfg: dict, now: float | None = None)
                 events.append(Event("seats_back", s, prio))
                 state.seats_alerted_at[s.key] = now
         state.seen_shows[s.key] = s.avail
+    # If a show is pulled/closed on District, forget it so a real re-opening alerts again.
+    for gone in set(state.seen_shows) - matching_keys:
+        state.seen_shows.pop(gone, None)
+        state.seats_alerted_at.pop(gone, None)
     return events

@@ -127,13 +127,17 @@ def cycle(cfg: dict, state: State, notifier: Notifier, last_shows: list[Show]) -
         return shows
 
     # 4. Alerts.
-    resend = list(state.pending_priority)
+    min_seats = cfg.get("min_seats", 1)
+    live_keys = {s.key for s in shows if matches(s, cfg) and s.avail >= min_seats}
+    resend = [p for p in state.pending_priority if p.get("key") in live_keys]
+    state.pending_priority = list(resend)
     normal = []
     for e in events:
         if e.priority:
             text = event_text(e, movie) + "\n\n<i>Reply anything to stop repeats.</i>"
             notifier.send(text)
-            state.pending_priority.append({"text": text, "repeats": cfg.get("priority_max_repeats", 10)})
+            state.pending_priority.append({"key": e.show.key, "text": text,
+                                           "repeats": cfg.get("priority_max_repeats", 10)})
         else:
             normal.append(event_text(e, movie))
     if normal:

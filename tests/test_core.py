@@ -88,10 +88,15 @@ class DetectTests(unittest.TestCase):
         ev = detect([a2, r, r2], st, CFG, now=120)
         self.assertEqual(sorted(e.kind for e in ev), ["new_show", "seats_back"])
 
-        # Seats flicker 0 -> 2 inside cooldown -> no repeat alert
+        # Flicker 0 -> 2 inside cooldown -> no repeat alert
         detect([show(1, "PVR VR Mall", 1, "2026-12-17T07:35", 0)], st, CFG, now=180)
         ev = detect([show(1, "PVR VR Mall", 1, "2026-12-17T07:35", 2)], st, CFG, now=240)
         self.assertEqual(ev, [])
+
+        # Show pulled from feed then re-published -> alerts again
+        detect([show(1, "PVR VR Mall", 1, "2026-12-17T07:35", 2)], st, CFG, now=300)
+        ev = detect([show(1, "PVR VR Mall", 1, "2026-12-17T07:35", 2), r], st, CFG, now=360)
+        self.assertEqual([(e.kind, e.priority) for e in ev], [("new_show", "Rakki")])
 
     def test_state_roundtrip(self):
         import os
